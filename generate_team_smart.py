@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize, maximize
+from scipy.optimize import minimize
 
 # Sample data: 10 players with their skill scores
 players = pd.read_json('players.json', lines=True)
