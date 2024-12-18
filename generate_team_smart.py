@@ -1,16 +1,64 @@
 import numpy as np
 import pandas as pd
+import gspread as gs
 from scipy.optimize import minimize
 
+
 # Sample data: 10 players with their skill scores
-players = pd.read_json('players.json', lines=True)
+# players = pd.read_json('players.json', lines=True)
+
+def map_positions(positions):
+    mapped_positions = []
+    for position in positions:
+        match position:
+            case 'Carry':
+                mapped_positions.append(1)
+            case 'Mid':
+                mapped_positions.append(2)
+            case 'Offlane':
+                mapped_positions.append(3)
+            case 'Soft Support':
+                mapped_positions.append(4)
+            case 'Hard Support':
+                mapped_positions.append(5)
+            case _:
+                mapped_positions.append(-1)
+    return mapped_positions
+
 
 # Constraint: ensure the difference is below a certain value, e.g., 3
-desired_difference = 500
+desired_difference = 1000
 max_retries = 1000  # Maximum number of retries
-players_skill = players['skill']
-players_positions = players['positions']
+active_players = [
+    'hetjerbear',
+    'bok_choy_bitch',
+    'angrytactix',
+    'humblekorean',
+    'psyukia',
+    'ogdoublesampson',
+    'avery76252',
+    'sonofpaint',
+    'tauberry.',
+    'mathmagician10']  # TODO: Check to see if all players exsist
 
+gc = gs.service_account('Y:\Projects\OutbackInhouse\OutbackInhouse\outbackinhouse-googlekey.json')
+
+wks = gc.open("Outback Inhouse Players").worksheet("Form Responses 1")
+
+all_players = wks.get_all_values()  # TODO: Probably better way to only grab players needed
+
+df_players = pd.DataFrame(all_players[1:], columns=all_players[0])
+df_players['mmr'] = df_players['mmr'].astype(dtype=np.int64)
+
+df_players['discord id'] = df_players['discord id'].str.lower()  # lowercase all discord ids
+df_players['positions'] = df_players['positions'].str.split(', ')  # turn positions into a list
+df_players['positions'] = df_players['positions'].apply(map_positions)  # map named positions to numeric representation
+
+df_players = df_players[df_players['discord id'].isin(active_players)].reset_index(drop=True)
+
+players_skill = df_players['mmr']
+players_positions = df_players['positions']
+# TODO: Check for 10 players returned
 
 # Objective function: minimize the difference between the two teams' skill scores
 def skill_difference(x):
@@ -72,8 +120,8 @@ for attempt in range(max_retries):
         team1_indices = np.argsort(final_assignment)[:5]
         team2_indices = np.argsort(final_assignment)[5:]
 
-        team1 = players.iloc[team1_indices][['name', 'skill']]
-        team2 = players.iloc[team2_indices][['name', 'skill']]
+        team1 = df_players.iloc[team1_indices][['name', 'mmr']]
+        team2 = df_players.iloc[team2_indices][['name', 'mmr']]
 
         team1_positions = get_positions(team1_indices)
         team2_positions = get_positions(team2_indices)
@@ -90,7 +138,9 @@ for attempt in range(max_retries):
         # Output the results
         print(f"Success on attempt {attempt + 1}:")
         print("Team 1:\n", team1.sort_values('positions').to_string(index=False))
+        print(f"AVG: {team1['mmr'].mean()}")
         print("Team 2:\n", team2.sort_values('positions').to_string(index=False))
+        print(f"AVG: {team2['mmr'].mean()}")
         print("Skill Difference:", skill_difference(result.x))
         break
 else:
